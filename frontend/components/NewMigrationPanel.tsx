@@ -31,6 +31,10 @@ interface SchemaPreview {
   fields: SchemaFieldPreview[];
 }
 
+interface SchemaPreviewResponse {
+  schema: SchemaPreview;
+}
+
 const TYPE_COLORS: Record<string, string> = {
   string: "bg-blue-50 text-blue-700",
   email: "bg-violet-50 text-violet-700",
@@ -86,7 +90,7 @@ export function NewMigrationPanel() {
   const addFiles = (list: FileList | null) =>
     list && setFiles((prev) => [...prev, ...Array.from(list)]);
 
-  const handleSchemaFile = (file: File) => {
+  const handleSchemaFile = async (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!ext || !["yaml", "yml", "json"].includes(ext)) {
       setSchemaError("Only .yaml, .yml, or .json files are accepted.");
@@ -94,94 +98,17 @@ export function NewMigrationPanel() {
     }
     setSchemaFile(file);
     setSchemaError("");
-
-    // Parse locally for preview (read as text)
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = reader.result as string;
-        // Quick local preview — the real validation happens server-side
-        let raw: any;
-        if (ext === "json") {
-          raw = JSON.parse(text);
-        } else {
-          // Simple YAML field extraction for preview
-          // Full parsing happens on the backend
-          raw = null;
-        }
-        if (raw && typeof raw === "object") {
-          const fields = raw.fields;
-          if (Array.isArray(fields)) {
-            setSchemaPreview({
-              entity: raw.entity || "record",
-              primary_key: raw.primary_key || "",
-              match_keys: raw.match_keys || [],
-              field_count: fields.length,
-              fields: fields.map((f: any) =>
-                typeof f === "string"
-                  ? { name: f, type: "string", required: false, aliases: [] }
-                  : {
-                      name: f.name || f.field || "",
-                      type: f.type || "string",
-                      required: f.required || false,
-                      aliases: f.aliases || [],
-                    }
-              ),
-            });
-          } else if (fields && typeof fields === "object") {
-            const parsed = Object.entries(fields).map(
-              ([fname, spec]: [string, any]) => ({
-                name: fname,
-                type:
-                  typeof spec === "string"
-                    ? spec
-                    : spec?.type || "string",
-                required:
-                  typeof spec === "object" ? spec?.required || false : false,
-                aliases:
-                  typeof spec === "object" ? spec?.aliases || [] : [],
-              })
-            );
-            setSchemaPreview({
-              entity: raw.entity || "record",
-              primary_key: raw.primary_key || "",
-              match_keys: raw.match_keys || [],
-              field_count: parsed.length,
-              fields: parsed,
-            });
-          } else {
-            // Bare list at root
-            if (Array.isArray(raw)) {
-              setSchemaPreview({
-                entity: "record",
-                primary_key: "",
-                match_keys: [],
-                field_count: raw.length,
-                fields: raw.map((f: any) =>
-                  typeof f === "string"
-                    ? { name: f, type: "string", required: false, aliases: [] }
-                    : {
-                        name: f.name || "",
-                        type: f.type || "string",
-                        required: false,
-                        aliases: [],
-                      }
-                ),
-              });
-            } else {
-              setSchemaPreview(null);
-            }
-          }
-        } else {
-          // For YAML, skip local preview — server will validate
-          setSchemaPreview(null);
-        }
-      } catch {
-        // Local preview failed — that's fine, server will validate
-        setSchemaPreview(null);
-      }
-    };
-    reader.readAsText(file);
+    try {
+      const preview = await apiUploadSingle<SchemaPreviewResponse>(
+        "/api/runs/schema/preview",
+        file
+      );
+      setSchemaPreview(preview.schema);
+    } catch (e) {
+      setSchemaFile(null);
+      setSchemaPreview(null);
+      setSchemaError(e instanceof Error ? e.message : "Could not parse schema.");
+    }
   };
 
   const removeSchema = () => {
@@ -313,7 +240,7 @@ export function NewMigrationPanel() {
                     e.preventDefault();
                     setSchemaDragging(false);
                     const f = e.dataTransfer.files[0];
-                    if (f) handleSchemaFile(f);
+                    if (f) void handleSchemaFile(f);
                   }}
                 >
                   <FileCode2 className="mx-auto h-5 w-5 text-neutral-400" />
@@ -337,7 +264,7 @@ export function NewMigrationPanel() {
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
-                      if (f) handleSchemaFile(f);
+                      if (f) void handleSchemaFile(f);
                     }}
                   />
                 </div>
@@ -403,8 +330,7 @@ export function NewMigrationPanel() {
 
                 {!schemaPreview && (
                   <p className="text-[11px] text-neutral-400 italic">
-                    YAML preview available after upload. Full validation happens
-                    on the server.
+                    Preview unavailable. Choose a valid YAML or JSON schema.
                   </p>
                 )}
               </>

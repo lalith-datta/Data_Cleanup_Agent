@@ -1,0 +1,4 @@
+customer code,full name,contact email,phone number,plan,date joined,customer status,town,last_ticket_date
+C-1001,Aisha Patel,aisha.patel@northstar.example,+91 98765 43210,professional,15-Jan-2024,Current,Bengaluru,2024-05-17
+C-1003,Meera Iyer,meera.iyer@orbit.example,9876500003,free,29-Feb-2024,Enabled,Chennai,2024-06-02
+C-1005,Noor Ali,not-an-email,9876500005,pro,2024-04-01,Active,Hyderabad,2024-06-10

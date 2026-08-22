@@ -1,0 +1,4 @@
+client_id,contact_name,email_address,mobile,organisation,tier,registration_date,status,city,marketing_opt_in
+C-1001,Aisha Patel,aisha.patel@northstar.example,+91 98765 43210,Northstar Retail,Pro,15/01/2024,Enabled,Bengaluru,yes
+C-1002,Daniel Wong,daniel.wong@harbor.example,9876500002,Harbor Logistics,Enterprise,2023-11-08,Active,Mumbai,no
+C-1003,Meera Iyer,meera.iyer@orbit.example,+91-98765-00003,Orbit Labs,Basic,02/29/2024,Current,Chennai,yes

@@ -1,0 +1,75 @@
+# Sample target schema for a customer migration.
+# Upload this file when creating a new migration run, then upload one or more
+# of the CSV files in this directory as source data.
+entity: customer
+primary_key: customer_id
+match_keys:
+  - email
+  - customer_id
+
+fields:
+  customer_id:
+    type: string
+    required: true
+    description: Stable customer identifier in the destination CRM.
+    aliases: [customer id, customer code, client id, account id, id]
+
+  full_name:
+    type: string
+    required: true
+    aliases: [customer name, client name, name, contact name, full name]
+
+  email:
+    type: email
+    required: true
+    aliases: [email address, email_address, email, contact email, work email]
+
+  phone:
+    type: string
+    required: false
+    aliases: [phone number, telephone, mobile, mobile number, contact number]
+
+  company_name:
+    type: string
+    required: false
+    aliases: [company, organisation, organization, account name, business name]
+
+  customer_tier:
+    type: enum
+    required: true
+    allowed: [standard, premium, enterprise]
+    aliases: [tier, customer type, plan, account tier]
+
+  signup_date:
+    type: date
+    format: "YYYY-MM-DD"
+    required: true
+    aliases: [created date, registration date, joined on, signup date, date joined]
+
+  account_status:
+    type: enum
+    required: true
+    allowed: [active, inactive, suspended]
+    aliases: [status, account status, customer status, state]
+
+  billing_city:
+    type: string
+    required: false
+    aliases: [city, billing city, town, location]
+
+  lifetime_value:
+    type: number
+    required: false
+    aliases: [ltv, total spend, total revenue, customer value, lifetime value]
+
+enum_normalization:
+  customer_tier:
+    standard: [standard, basic, starter, free]
+    premium: [premium, pro, professional]
+    enterprise: [enterprise, business, corporate]
+  account_status:
+    active: [active, enabled, current]
+    inactive: [inactive, closed, churned]
+    suspended: [suspended, blocked, on hold]
+
+unmapped_source_columns_policy: escalate

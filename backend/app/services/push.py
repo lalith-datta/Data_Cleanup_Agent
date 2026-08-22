@@ -1,8 +1,8 @@
 """Push / retry / rollback (Epic 7.2–7.4).
 
-Per-record push to the mock target with push_result rows, idempotent on
-employee_id, retry capped by MAX_PUSH_ATTEMPTS, and rollback that removes
-pushed records from the target. Everything is audited.
+Per-record push to the mock target with push_result rows, idempotent on each
+run's configured primary key, retry capped by MAX_PUSH_ATTEMPTS, and rollback
+that removes pushed records from the target. Everything is audited.
 """
 
 from datetime import datetime, timezone
@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select
 
 from ..config import get_settings
+from ..engines.schema_loader import get_run_schema
 from ..models import MigrationRun, PushResult, Record
 from .audit import audit
 from .mock_target import get_mock_store
@@ -27,7 +28,10 @@ def _pushable_records(session: Session, run_id: int) -> list[Record]:
 def _attempt(session: Session, run: MigrationRun, rec: Record) -> PushResult:
     store = get_mock_store()
     payload = rec.merged_json
-    status_code, body = store.create_employee(payload, run_id=run.id)
+    schema = get_run_schema(run)
+    status_code, body = store.create_record(
+        payload, primary_key=schema.primary_key, run_id=run.id
+    )
     attempt_no = (
         len(
             session.exec(
@@ -124,9 +128,10 @@ def rollback_run(session: Session, run: MigrationRun) -> dict:
         )
     ).all()
     rolled_back = 0
+    schema = get_run_schema(run)
     for rec in pushed:
-        employee_id = str(rec.merged_json.get("employee_id") or "")
-        if store.delete_employee(employee_id, run_id=run.id):
+        record_id = str(rec.merged_json.get(schema.primary_key) or "")
+        if store.delete_record(record_id, schema.primary_key, run_id=run.id):
             rolled_back += 1
         rec.status = "rolled_back"
         rec.updated_at = datetime.now(timezone.utc)

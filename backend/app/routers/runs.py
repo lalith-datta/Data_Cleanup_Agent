@@ -23,6 +23,34 @@ class CreateRunBody(BaseModel):
     name: str
 
 
+@router.post("/schema/preview")
+async def preview_schema(file: UploadFile):
+    """Parse a schema before a migration run is created.
+
+    This gives the upload UI the same authoritative YAML/JSON preview that
+    will be used when the schema is attached to a run.
+    """
+    filename = (file.filename or "").lower()
+    if filename.endswith(".json"):
+        fmt = "json"
+    elif filename.endswith((".yaml", ".yml")):
+        fmt = "yaml"
+    else:
+        raise HTTPException(
+            422, "Unsupported file type. Upload a .yaml, .yml, or .json file."
+        )
+
+    try:
+        content = (await file.read()).decode("utf-8")
+        schema = load_schema_from_content(content, fmt)
+    except UnicodeDecodeError:
+        raise HTTPException(422, "Schema file must be UTF-8 encoded.")
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+    return {"schema": _schema_preview(schema)}
+
+
 @router.post("")
 def create_run(body: CreateRunBody, session: Session = Depends(get_session)):
     run = MigrationRun(name=body.name, status="created")

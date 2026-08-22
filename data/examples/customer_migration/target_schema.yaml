@@ -16,12 +16,12 @@ fields:
 
   full_name:
     type: string
-    required: true
+    required: false
     aliases: [customer name, client name, name, contact name, full name]
 
   email:
     type: email
-    required: true
+    required: false
     aliases: [email address, email_address, email, contact email, work email]
 
   phone:
@@ -43,12 +43,12 @@ fields:
   signup_date:
     type: date
     format: "YYYY-MM-DD"
-    required: true
+    required: false
     aliases: [created date, registration date, joined on, signup date, date joined]
 
   account_status:
     type: enum
-    required: true
+    required: false
     allowed: [active, inactive, suspended]
     aliases: [status, account status, customer status, state]
 

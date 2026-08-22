@@ -78,7 +78,11 @@ def push_run(session: Session, run: MigrationRun) -> dict:
         _attempt(session, run, rec) for rec in _pushable_records(session, run.id)
     ]
     failed = [r for r in results if r.status == "failed"]
-    run.status = "completed" if not failed else "pushing"  # stays until retried
+    # A send attempt is complete even if individual records failed. Successful
+    # records remain pushed, while failed records stay eligible for the
+    # explicit retry endpoint; leaving the run in ``pushing`` here makes the
+    # UI look like a job is still running when there is nothing in flight.
+    run.status = "completed"
     run.updated_at = datetime.now(timezone.utc)
     session.add(run)
     _recompute_stats(session, run)

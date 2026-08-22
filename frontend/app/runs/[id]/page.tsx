@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { use } from "react";
 import { apiGet } from "@/lib/api";
 import type { ActivityEvent, Run, SourceFile } from "@/lib/types";
@@ -50,10 +50,31 @@ export default function RunPage({
     queryKey: ["activity", id],
     queryFn: () => apiGet<ActivityEvent[]>(`/api/runs/${id}/activity`),
     refetchInterval: isActive ? 1000 : false,
+    enabled: !run.isLoading,
   });
 
   const st = runStatus(status);
   const escalationsOpen = run.data?.stats_json.escalations_open ?? 0;
+
+  // Show a spinner while the initial data is loading — avoids flashing
+  // misleading progress stages (e.g. "analyzing files") for finished runs.
+  if (run.isLoading) {
+    return (
+      <div className="mx-auto max-w-4xl px-6 py-8">
+        <a
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          All migrations
+        </a>
+        <div className="mt-32 flex flex-col items-center justify-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+          <p className="text-sm text-neutral-500">Loading migration…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -101,3 +122,4 @@ export default function RunPage({
     </div>
   );
 }
+

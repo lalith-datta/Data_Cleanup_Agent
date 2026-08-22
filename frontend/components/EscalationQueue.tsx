@@ -7,7 +7,13 @@ import type { Escalation, RecordRow } from "@/lib/types";
 import { buildNameMap } from "@/lib/labels";
 import { EscalationCard } from "./EscalationCard";
 
-export function EscalationQueue({ runId }: { runId: string }) {
+export function EscalationQueue({
+  runId,
+  entity,
+}: {
+  runId: string;
+  entity: string;
+}) {
   const open = useQuery({
     queryKey: ["escalations", runId, "open"],
     queryFn: () =>
@@ -86,6 +92,7 @@ export function EscalationQueue({ runId }: { runId: string }) {
               escalation={e}
               runId={runId}
               nameFor={nameFor}
+              entity={entity}
             />
           ))}
         </div>

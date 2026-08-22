@@ -13,27 +13,8 @@ import {
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { apiPost, apiUpload, apiUploadSingle } from "@/lib/api";
-import type { Run } from "@/lib/types";
-
-/** Field info returned by the schema preview endpoint. */
-interface SchemaFieldPreview {
-  name: string;
-  type: string;
-  required: boolean;
-  aliases: string[];
-}
-
-interface SchemaPreview {
-  entity: string;
-  primary_key: string;
-  match_keys: string[];
-  field_count: number;
-  fields: SchemaFieldPreview[];
-}
-
-interface SchemaPreviewResponse {
-  schema: SchemaPreview;
-}
+import type { Run, SchemaPreview, SchemaResponse } from "@/lib/types";
+import { pluralize } from "@/lib/labels";
 
 const TYPE_COLORS: Record<string, string> = {
   string: "bg-blue-50 text-blue-700",
@@ -99,7 +80,7 @@ export function NewMigrationPanel() {
     setSchemaFile(file);
     setSchemaError("");
     try {
-      const preview = await apiUploadSingle<SchemaPreviewResponse>(
+      const preview = await apiUploadSingle<SchemaResponse>(
         "/api/runs/schema/preview",
         file
       );
@@ -129,9 +110,11 @@ export function NewMigrationPanel() {
         </h2>
       </div>
       <p className="mb-4 text-xs leading-relaxed text-neutral-500">
-        Upload a client&rsquo;s employee files (CSV or Excel). The assistant
-        sorts out the columns, cleans things up, combines everyone into one
-        list, and only asks when it&rsquo;s genuinely unsure.
+        Upload a client&rsquo;s{" "}
+        {schemaPreview ? pluralize(schemaPreview.entity) : "data"} files (CSV
+        or Excel). The assistant sorts out the columns, cleans things up,
+        combines everyone into one list, and only asks when it&rsquo;s
+        genuinely unsure.
       </p>
 
       <label className="block text-xs font-medium text-neutral-700">

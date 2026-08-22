@@ -90,3 +90,12 @@ enum_normalization:
 # Source columns with no confident target (e.g. "Grade", "BankName",
 # "EmploymentType") are surfaced, not silently dropped.
 unmapped_source_columns_policy: escalate
+
+# Secondary attribute the UI shows alongside each person's name.
+display_field: department
+
+# What the DESTINATION platform insists on beyond this schema's own
+# required fields — guarantees a demo-safe, retryable push failure.
+target_system_rules:
+  required_fields: [department]
+  blocked_email_domains: [gmail.com]

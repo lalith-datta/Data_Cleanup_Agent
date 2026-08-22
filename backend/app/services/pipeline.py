@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session, select
 
-from ..engines.clean import clean_record
+from ..engines.clean import clean_record, normalize_enums
 from ..engines.ingest import parse_file, profile_columns
 from ..engines.mapping import decide_mapping
 from ..engines.reconcile import (
@@ -18,6 +18,7 @@ from ..engines.reconcile import (
     infer_source_date_formats,
     reconcile,
 )
+from ..config import get_settings
 from ..engines.schema_loader import get_run_schema
 from ..engines.validate import auto_fix, validate_record
 from ..llm import get_llm_client
@@ -41,6 +42,7 @@ async def run_mapping_stage(session: Session, run: MigrationRun) -> None:
         select(SourceFile).where(SourceFile.run_id == run.id)
     ).all()
     llm = get_llm_client()
+    s = get_settings()
 
     for sf in files:
         df = parse_file(sf.stored_path)
@@ -72,26 +74,70 @@ async def run_mapping_stage(session: Session, run: MigrationRun) -> None:
                 )
 
             elif decision.decision == "ambiguous_mapping":
-                fm = FieldMapping(
-                    run_id=run.id,
-                    source_file_id=sf.id,
-                    source_column=col,
-                    method="fuzzy",
-                    confidence=decision.confidence,
-                    status="escalated",
-                    rationale=decision.rationale,
-                    candidates_json=decision.candidates,
-                )
-                session.add(fm)
-                session.flush()
-                raise_escalation(
-                    session, run.id, "ambiguous_mapping",
-                    entity_ref=f"{sf.filename}:{col}",
-                    context={"source_column": col, "file": sf.filename,
-                             "samples": samples},
-                    options=decision.candidates,
-                    confidence=decision.confidence,
-                )
+                # Tied on fuzzy string similarity alone — RapidFuzz has no
+                # semantic understanding, so a tie here doesn't mean the
+                # choice is genuinely unknowable, just that character-level
+                # overlap can't break it. Give the LLM a shot at THIS
+                # specific tie (scoped to only the tied candidates, not the
+                # full schema, so it's a sharp "pick between these" question)
+                # before asking a human. Still escalates if the LLM isn't
+                # confident either — this never lowers the bar, it just uses
+                # intelligence that's already wired in for the low-score
+                # branch below, applied here too.
+                tied_fields = [
+                    c["field"] for c in decision.candidates
+                    if decision.candidates[0]["score"] - c["score"] <= s.ambiguous_delta
+                ]
+                suggestion = await llm.suggest_mapping(col, samples, tied_fields)
+                if (
+                    suggestion
+                    and suggestion.target_field in tied_fields
+                    and suggestion.confidence >= s.auto_apply_threshold
+                ):
+                    session.add(
+                        FieldMapping(
+                            run_id=run.id,
+                            source_file_id=sf.id,
+                            source_column=col,
+                            target_field=suggestion.target_field,
+                            method="llm",
+                            confidence=suggestion.confidence,
+                            status="auto_applied",
+                            rationale=(
+                                f"llm resolved tie {tied_fields}: "
+                                f"{suggestion.rationale}"
+                            ),
+                            candidates_json=decision.candidates,
+                        )
+                    )
+                    audit(
+                        session, run.id, "agent", "mapped_column",
+                        "column", f"{sf.filename}:{col}",
+                        after={"target": suggestion.target_field,
+                               "confidence": suggestion.confidence},
+                        reason=f"llm resolved ambiguous tie: {suggestion.rationale}",
+                    )
+                else:
+                    fm = FieldMapping(
+                        run_id=run.id,
+                        source_file_id=sf.id,
+                        source_column=col,
+                        method="fuzzy",
+                        confidence=decision.confidence,
+                        status="escalated",
+                        rationale=decision.rationale,
+                        candidates_json=decision.candidates,
+                    )
+                    session.add(fm)
+                    session.flush()
+                    raise_escalation(
+                        session, run.id, "ambiguous_mapping",
+                        entity_ref=f"{sf.filename}:{col}",
+                        context={"source_column": col, "file": sf.filename,
+                                 "samples": samples},
+                        options=decision.candidates,
+                        confidence=decision.confidence,
+                    )
 
             else:  # below fuzzy min -> LLM adjudicates, else unmapped_column
                 suggestion = await llm.suggest_mapping(
@@ -153,6 +199,7 @@ def run_downstream_stages(session: Session, run: MigrationRun) -> None:
     """Rebuild records from current mappings, then clean + validate.
     Idempotent pre-push: existing records for the run are replaced."""
     schema = get_run_schema(run)
+    s = get_settings()
 
     mappings = session.exec(
         select(FieldMapping).where(
@@ -237,11 +284,59 @@ def run_downstream_stages(session: Session, run: MigrationRun) -> None:
         # re-apply manual human edits so they survive the rebuild
         for fname, oval in overrides.items():
             fixed[fname] = oval
+        # An override may be the exact display text a human saw (e.g. the
+        # source's "Premium" rather than the schema's canonical "premium")
+        # — re-normalize so it doesn't silently fail validation the next
+        # time an UNRELATED escalation elsewhere triggers a full rebuild.
+        override_changes: list[dict] = []
+        fixed = normalize_enums(fixed, schema, override_changes)
         errors = validate_record(fixed, schema)
         # a field awaiting an ambiguous_date decision fails ISO validation by
         # definition — suppress that duplicate; the date escalation owns it
         pending_date_fields = {a["field"] for a in cr.ambiguous_dates}
         errors = [e for e in errors if e.field not in pending_date_fields]
+
+        # manager value that isn't an email -> resolve automatically at high
+        # confidence, else escalate. Deliberately binary (no lower
+        # "low-confidence, audited" tier the way mapping has): a wrong
+        # manager assignment is exactly the brief's "plausible-looking wrong
+        # answer" case (attaches a real person's email to someone else's
+        # record), so this uses the same high bar as auto_apply_threshold
+        # with nothing softer. Done before the Record exists so the
+        # resolved value — or lack of one — is there from construction,
+        # not a later mutation that a JSON column might not persist.
+        pending_manager_escalation: dict | None = None
+        mgr = fixed.get("manager_email")
+        if mgr and "@" not in str(mgr) and "manager_email" not in overrides:
+            from rapidfuzz import process as rf_process
+
+            matches = rf_process.extract(
+                str(mgr), sorted(known_emails), limit=3,
+            ) if known_emails else []
+            top_score = round(matches[0][1] / 100, 3) if matches else 0.0
+
+            if matches and top_score >= s.auto_apply_threshold:
+                matched_email = matches[0][0]
+                fixed["manager_email"] = matched_email
+                res.provenance["manager_email"] = {"file": "agent", "raw": mgr}
+                audit(
+                    session, run.id, "agent", "resolved_manager_lookup",
+                    "record", res.natural_key,
+                    before={"manager_email": mgr},
+                    after={"manager_email": matched_email},
+                    reason=(
+                        f"fuzzy match {top_score} >= auto-apply threshold "
+                        f"{s.auto_apply_threshold} — resolved without review"
+                    ),
+                )
+            else:
+                pending_manager_escalation = {
+                    "manager_name": mgr,
+                    "options": [
+                        {"value": m[0], "score": round(m[1] / 100, 3)}
+                        for m in matches
+                    ],
+                }
 
         rec = Record(
             run_id=run.id,
@@ -253,7 +348,7 @@ def run_downstream_stages(session: Session, run: MigrationRun) -> None:
         session.add(rec)
         session.flush()
 
-        for change in cr.changes + fixes:
+        for change in cr.changes + fixes + override_changes:
             audit(
                 session, run.id, "agent", "cleaned_value",
                 "record", res.natural_key,
@@ -294,20 +389,15 @@ def run_downstream_stages(session: Session, run: MigrationRun) -> None:
             restill_open.add(esc.id)
             rec.status = "needs_review"
 
-        # manager value that isn't an email -> manager_unresolved w/ matches
-        mgr = fixed.get("manager_email")
-        if mgr and "@" not in str(mgr) and "manager_email" not in overrides:
-            from rapidfuzz import process as rf_process
-
-            matches = rf_process.extract(
-                str(mgr), sorted(known_emails), limit=3,
-            ) if known_emails else []
+        if pending_manager_escalation is not None:
             esc = raise_escalation(
                 session, run.id, "manager_unresolved",
                 entity_ref=res.natural_key,
-                context={"record": res.natural_key, "manager_name": mgr},
-                options=[{"value": m[0], "score": round(m[1] / 100, 3)}
-                         for m in matches],
+                context={
+                    "record": res.natural_key,
+                    "manager_name": pending_manager_escalation["manager_name"],
+                },
+                options=pending_manager_escalation["options"],
             )
             restill_open.add(esc.id)
             rec.status = "needs_review"

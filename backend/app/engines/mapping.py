@@ -6,8 +6,15 @@ Deterministic-first, LLM-last:
   3. decision fn applies the PRD §8 thresholds:
        score >= auto_apply and single clear winner  -> auto_apply
        top-2 within ambiguous_delta                  -> ambiguous_mapping
+                                                          (pipeline.py tries the
+                                                          LLM on the tie first;
+                                                          still escalates if
+                                                          it isn't confident)
        min <= score < auto_apply, single winner      -> auto_apply (low-conf note)
        score < min                                   -> LLM adjudicates, else unmapped_column
+
+This function stays pure fuzzy-only — the LLM adjudication for both the tied
+and low-score branches lives one layer up, in pipeline.py's orchestration.
 """
 
 from dataclasses import dataclass, field

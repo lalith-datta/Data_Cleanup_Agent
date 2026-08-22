@@ -1,9 +1,10 @@
 """Mock target system (Epic 7.1): simulates the client's new platform.
 
-The default employee demo keeps deterministic failure rules: a record fails
-with 422 when its email domain is gmail.com or its department is missing.
-For custom schemas, the store validates the schema's configured primary key
-instead of assuming ``employee_id``.
+Deterministic failure rule (demo-safe, PRD §10): a record fails with 422
+when it's missing a value the DESTINATION system requires beyond this run's
+own schema (TargetSchema.target_system_rules) — e.g. the employee schema
+declares department required and gmail.com blocked; a custom schema can
+declare its own equivalents, or none at all.
 
 The store is in-memory and keyed on each schema's primary-key name and value,
 so pushes are naturally idempotent without collisions between entity types.
@@ -30,18 +31,30 @@ class MockTargetStore:
         payload: dict[str, Any],
         primary_key: str,
         run_id: int | None = None,
+        required_fields: list[str] | None = None,
+        blocked_email_domains: list[str] | None = None,
     ) -> tuple[int, dict]:
-        """Upsert one record using the schema's primary key."""
+        """Upsert one record using the schema's primary key.
+
+        `required_fields`/`blocked_email_domains` are the destination
+        system's OWN extra rules (TargetSchema.target_system_rules) — not
+        this schema's required-field validation, which every `valid`
+        record has already satisfied by the time it reaches push. No rules
+        declared means nothing extra can fail here, which is a legitimate
+        outcome for a schema that doesn't declare any.
+        """
         email = str(payload.get("email") or "").strip().lower()
         record_id = str(payload.get(primary_key) or "").strip()
         storage_key = (primary_key, record_id)
 
         if not record_id:
             return 422, {"error": f"{primary_key} required"}
-        if primary_key == "employee_id" and email.endswith("@gmail.com"):
-            return 422, {"error": "personal email domains are not accepted"}
-        if primary_key == "employee_id" and not payload.get("department"):
-            return 422, {"error": "department is mandatory in target system"}
+        for domain in blocked_email_domains or []:
+            if email.endswith(f"@{domain.strip().lower()}"):
+                return 422, {"error": f"{domain} email domains are not accepted"}
+        for req_field in required_fields or []:
+            if not payload.get(req_field):
+                return 422, {"error": f"{req_field} is mandatory in target system"}
 
         self._records[storage_key] = dict(payload)  # upsert = idempotent
         if run_id is not None:
@@ -51,8 +64,16 @@ class MockTargetStore:
     def create_employee(
         self, payload: dict[str, Any], run_id: int | None = None
     ) -> tuple[int, dict]:
-        """Backwards-compatible employee endpoint for manual demo calls."""
-        return self.create_record(payload, "employee_id", run_id)
+        """Backwards-compatible employee endpoint for manual demo calls —
+        the historic employee rules, explicit here rather than special-cased
+        inside create_record."""
+        return self.create_record(
+            payload,
+            "employee_id",
+            run_id,
+            required_fields=["department"],
+            blocked_email_domains=["gmail.com"],
+        )
 
     def delete_record(
         self, record_id: str, primary_key: str, run_id: int | None = None

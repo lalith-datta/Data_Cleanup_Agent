@@ -11,7 +11,7 @@
 const FIELD_LABELS: Record<string, string> = {
   employee_id: "Employee ID",
   full_name: "Full name",
-  email: "Work email",
+  email: "Email",
   phone: "Phone",
   department: "Department",
   job_title: "Job title",
@@ -28,6 +28,32 @@ export function fieldLabel(key: string): string {
     FIELD_LABELS[key] ??
     key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   );
+}
+
+// ---------------------------------------------------------- entity naming
+/** Naive but effective English pluralizer for entity nouns like "employee"
+ *  or "customer" — good enough for the schema-declared `entity` name,
+ *  which is always a plain singular noun. */
+export function pluralize(word: string): string {
+  if (!word) return word;
+  if (/(s|x|z|ch|sh)$/i.test(word)) return word + "es";
+  if (/[^aeiou]y$/i.test(word)) return word.slice(0, -1) + "ies";
+  return word + "s";
+}
+
+export function capitalize(word: string): string {
+  return word ? word[0].toUpperCase() + word.slice(1) : word;
+}
+
+/** "a customer" / "an employee" — approximate but good enough for the
+ *  schema-declared entity noun. */
+export function withArticle(word: string): string {
+  return `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;
+}
+
+/** "1 customer" / "3 customers" — the noun form to use for a given count. */
+export function countNoun(n: number, entity: string): string {
+  return `${n} ${n === 1 ? entity : pluralize(entity)}`;
 }
 
 // ---------------------------------------------------------------- tone system
@@ -124,8 +150,8 @@ export function escalationCopy(type: string): EscalationCopy {
 // ------------------------------------------------------- people & values
 /** Turn a reconciliation key like "email:priya.sharma@acme.com" or
  *  "id:E1003" into something readable when we don't have the real name. */
-export function prettyKey(naturalKey: string): string {
-  if (!naturalKey) return "this employee";
+export function prettyKey(naturalKey: string, entity = "record"): string {
+  if (!naturalKey) return `this ${entity}`;
   const [prefix, ...rest] = naturalKey.split(":");
   const value = rest.join(":") || prefix;
   if (prefix === "email") return value;

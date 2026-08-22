@@ -18,7 +18,7 @@ function summary(run: Run): string {
     case "pushing":
       return `${s.pushed} sent${s.push_failed ? `, ${s.push_failed} to retry` : "…"}`;
     case "completed":
-      return `${s.pushed} employee${s.pushed === 1 ? "" : "s"} sent`;
+      return `${s.pushed} sent`;
     case "failed":
       return "Stopped before finishing";
     case "rolled_back":
@@ -61,7 +61,7 @@ export default function MigrationsList() {
       ) : list.length === 0 ? (
         <EmptyCard
           title="No migrations yet"
-          body="Upload a client's employee files on the left to start your first one."
+          body="Upload a client's data files on the left to start your first one."
         />
       ) : (
         <ul className="space-y-2">

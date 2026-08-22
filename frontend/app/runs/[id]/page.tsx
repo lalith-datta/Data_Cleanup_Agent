@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { use } from "react";
 import { apiGet } from "@/lib/api";
-import type { ActivityEvent, Run, SourceFile } from "@/lib/types";
+import type { ActivityEvent, Run, SchemaResponse, SourceFile } from "@/lib/types";
 import { runStatus } from "@/lib/labels";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AgentSummary } from "@/components/AgentSummary";
@@ -41,6 +41,13 @@ export default function RunPage({
     queryKey: ["files", id],
     queryFn: () => apiGet<SourceFile[]>(`/api/runs/${id}/files`),
   });
+
+  const schema = useQuery({
+    queryKey: ["schema", id],
+    queryFn: () => apiGet<SchemaResponse>(`/api/runs/${id}/schema`),
+  });
+  const entity = schema.data?.schema.entity || "record";
+  const displayField = schema.data?.schema.display_field ?? null;
 
   const status = run.data?.status ?? "ingesting";
   const isActive = ACTIVE_STATUSES.has(status);
@@ -94,7 +101,7 @@ export default function RunPage({
       </header>
 
       {run.data && (
-        <AgentSummary run={run.data} fileCount={files.data?.length ?? 0} />
+        <AgentSummary run={run.data} fileCount={files.data?.length ?? 0} entity={entity} />
       )}
 
       {showProgress && (
@@ -111,14 +118,14 @@ export default function RunPage({
       )}
 
       {(status === "awaiting_review" || escalationsOpen > 0) && (
-        <EscalationQueue runId={id} />
+        <EscalationQueue runId={id} entity={entity} />
       )}
 
-      {run.data && <PushPanel run={run.data} runId={id} />}
+      {run.data && <PushPanel run={run.data} runId={id} entity={entity} />}
 
-      <RecordsTable runId={id} />
+      <RecordsTable runId={id} entity={entity} displayField={displayField} />
 
-      <AuditLogView runId={id} />
+      <AuditLogView runId={id} entity={entity} />
     </div>
   );
 }

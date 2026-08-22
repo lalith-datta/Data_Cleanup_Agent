@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiGet } from "@/lib/api";
 import type { AuditEntry, RecordRow } from "@/lib/types";
-import { fieldLabel, prettyValue } from "@/lib/labels";
+import { fieldLabel, prettyValue, withArticle } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 // Human sentence for each human decision.
@@ -92,7 +92,13 @@ function describe(e: AuditEntry, personFrom: (t: string) => string): Line {
 const HUMAN = "You";
 const AGENT = "Agent";
 
-export function AuditLogView({ runId }: { runId: string }) {
+export function AuditLogView({
+  runId,
+  entity,
+}: {
+  runId: string;
+  entity: string;
+}) {
   const [who, setWho] = useState<"all" | "agent" | "human">("all");
   const [open, setOpen] = useState(false);
 
@@ -113,7 +119,7 @@ export function AuditLogView({ runId }: { runId: string }) {
   );
   const personFrom = (text: string): string => {
     for (const [key, name] of nameByKey) if (text.includes(key)) return name;
-    return "an employee";
+    return withArticle(entity);
   };
 
   const entries = (audit.data ?? [])

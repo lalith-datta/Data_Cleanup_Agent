@@ -33,6 +33,20 @@ class FieldSpec(BaseModel):
     notes: str = ""
 
 
+class TargetSystemRules(BaseModel):
+    """What the DESTINATION system additionally insists on, beyond this
+    schema's own required-field validation — e.g. a field this schema marks
+    optional but the target platform won't accept without, or an email
+    domain the target rejects. Exists so the mock target's deterministic
+    push failure (PRD §10) generalizes to any schema: a record that's
+    already `valid` per its own schema has nothing left to fail on
+    otherwise, since Validate already checked every field this schema
+    itself requires."""
+
+    required_fields: list[str] = []
+    blocked_email_domains: list[str] = []
+
+
 class TargetSchema(BaseModel):
     entity: str
     primary_key: str
@@ -40,6 +54,11 @@ class TargetSchema(BaseModel):
     fields: dict[str, FieldSpec]
     enum_normalization: dict[str, dict[str, list[str]]]
     unmapped_source_columns_policy: str = "escalate"
+    # Optional field to show as a record's secondary attribute in the UI
+    # (e.g. "department" for employees, "company_name" for customers).
+    # None = the UI shows no secondary column rather than guessing.
+    display_field: str | None = None
+    target_system_rules: TargetSystemRules = TargetSystemRules()
 
     def field_names(self) -> list[str]:
         return list(self.fields.keys())
@@ -163,6 +182,10 @@ def parse_target_schema(raw: dict[str, Any]) -> TargetSchema:
         enum_normalization=raw.get("enum_normalization", {}),
         unmapped_source_columns_policy=raw.get(
             "unmapped_source_columns_policy", "escalate"
+        ),
+        display_field=raw.get("display_field"),
+        target_system_rules=TargetSystemRules(
+            **raw.get("target_system_rules", {})
         ),
     )
 

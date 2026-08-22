@@ -7,7 +7,7 @@ import { NewMigrationPanel } from "@/components/NewMigrationPanel";
 export const metadata: Metadata = {
   title: "Migration Assistant",
   description:
-    "Bring client employee data into the new system, with a human in the loop",
+    "Bring a client's data into the new system, with a human in the loop",
 };
 
 export default function RootLayout({

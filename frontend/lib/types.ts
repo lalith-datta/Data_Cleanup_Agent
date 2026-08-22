@@ -85,6 +85,28 @@ export interface AuditEntry {
   reason: string;
 }
 
+export interface SchemaFieldPreview {
+  name: string;
+  type: string;
+  required: boolean;
+  aliases: string[];
+}
+
+export interface SchemaPreview {
+  entity: string;
+  primary_key: string;
+  match_keys: string[];
+  field_count: number;
+  display_field: string | null;
+  fields: SchemaFieldPreview[];
+}
+
+export interface SchemaResponse {
+  // present on GET /{run_id}/schema, absent from POST /schema/preview
+  custom?: boolean;
+  schema: SchemaPreview;
+}
+
 export const ESCALATION_LABELS: Record<string, string> = {
   ambiguous_mapping: "Ambiguous mapping",
   value_conflict: "Conflicting values",

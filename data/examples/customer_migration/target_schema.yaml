@@ -73,3 +73,14 @@ enum_normalization:
     suspended: [suspended, blocked, on hold]
 
 unmapped_source_columns_policy: escalate
+
+# Secondary attribute the UI shows alongside each customer's name.
+display_field: company_name
+
+# What the DESTINATION CRM insists on beyond this schema's own required
+# fields. lifetime_value is optional here (not every source file tracks
+# it), but the new CRM won't accept a customer record without one —
+# guarantees a demo-safe, retryable push failure the same way the
+# employee schema's "department" does.
+target_system_rules:
+  required_fields: [lifetime_value]

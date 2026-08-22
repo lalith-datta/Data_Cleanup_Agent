@@ -5,6 +5,7 @@ import { RotateCcw, Send, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { apiPost } from "@/lib/api";
 import type { Run } from "@/lib/types";
+import { countNoun, pluralize } from "@/lib/labels";
 
 interface PushSummary {
   pushed?: number;
@@ -17,9 +18,9 @@ interface PushSummary {
 }
 
 /** Friendly one-line summary of what a send / retry / undo just did. */
-function summarize(r: PushSummary): string {
+function summarize(r: PushSummary, entity: string): string {
   if (r.rolled_back !== undefined)
-    return `Removed ${r.rolled_back} employee${r.rolled_back === 1 ? "" : "s"} from the new system.`;
+    return `Removed ${countNoun(r.rolled_back, entity)} from the new system.`;
   if (r.retried !== undefined) {
     const left = r.still_failed ?? 0;
     return left
@@ -30,10 +31,18 @@ function summarize(r: PushSummary): string {
   const failed = r.failed ?? 0;
   return failed
     ? `Sent ${sent}. ${failed} couldn’t be sent — you can try those again below.`
-    : `Sent all ${sent} employees successfully.`;
+    : `Sent all ${sent} ${pluralize(entity)} successfully.`;
 }
 
-export function PushPanel({ run, runId }: { run: Run; runId: string }) {
+export function PushPanel({
+  run,
+  runId,
+  entity,
+}: {
+  run: Run;
+  runId: string;
+  entity: string;
+}) {
   const qc = useQueryClient();
   const [lastResult, setLastResult] = useState<PushSummary | null>(null);
   const [error, setError] = useState("");
@@ -66,7 +75,7 @@ export function PushPanel({ run, runId }: { run: Run; runId: string }) {
         </h2>
       </div>
       <p className="mt-1 text-sm text-neutral-500">
-        Adds each ready employee to the client&rsquo;s new platform. If any
+        Adds each ready {entity} to the client&rsquo;s new platform. If any
         don&rsquo;t go through, you can try them again or undo the whole thing —
         nothing is final until you&rsquo;re happy.
       </p>
@@ -87,7 +96,7 @@ export function PushPanel({ run, runId }: { run: Run; runId: string }) {
             className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
           >
             <Send className="h-4 w-4" />
-            Send {valid} employee{valid === 1 ? "" : "s"}
+            Send {countNoun(valid, entity)}
           </button>
         )}
         {hasActed && (
@@ -118,7 +127,7 @@ export function PushPanel({ run, runId }: { run: Run; runId: string }) {
 
       {lastResult && (
         <p className="mt-3 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-          {summarize(lastResult)}
+          {summarize(lastResult, entity)}
         </p>
       )}
       {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}

@@ -82,10 +82,17 @@ def normalize_enums(
 
 _DATE_FORMATS = [
     ("%Y-%m-%d", "iso"),
+    ("%Y/%m/%d", "iso"),
     ("%d-%m-%Y", "dd/mm"),
     ("%d/%m/%Y", "dd/mm"),
     ("%m-%d-%Y", "mm/dd"),
     ("%m/%d/%Y", "mm/dd"),
+    # Spelled-out months are never day/month-order ambiguous — their own
+    # label, always a single candidate when they match at all.
+    ("%d-%b-%Y", "text-month"),
+    ("%d %b %Y", "text-month"),
+    ("%d-%B-%Y", "text-month"),
+    ("%d %B %Y", "text-month"),
 ]
 
 
@@ -123,7 +130,9 @@ def parse_dates(
                 if lbl == label and (parsed := _parse_with(fmt, raw)):
                     break
             if not parsed:
-                parsed = _parse_with("%Y-%m-%d", raw)  # ISO is always acceptable
+                # ISO (either separator) is always acceptable regardless of
+                # the forced day/month order
+                parsed = _parse_with("%Y-%m-%d", raw) or _parse_with("%Y/%m/%d", raw)
             if parsed:
                 if parsed != raw:
                     changes.append(

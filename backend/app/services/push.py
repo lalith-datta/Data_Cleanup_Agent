@@ -30,7 +30,11 @@ def _attempt(session: Session, run: MigrationRun, rec: Record) -> PushResult:
     payload = rec.merged_json
     schema = get_run_schema(run)
     status_code, body = store.create_record(
-        payload, primary_key=schema.primary_key, run_id=run.id
+        payload,
+        primary_key=schema.primary_key,
+        run_id=run.id,
+        required_fields=schema.target_system_rules.required_fields,
+        blocked_email_domains=schema.target_system_rules.blocked_email_domains,
     )
     attempt_no = (
         len(

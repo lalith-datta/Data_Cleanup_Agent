@@ -11,6 +11,7 @@ import {
   Undo2,
 } from "lucide-react";
 import type { Run } from "@/lib/types";
+import { countNoun, pluralize } from "@/lib/labels";
 
 const ACTIVE = new Set([
   "created",
@@ -28,9 +29,11 @@ const ACTIVE = new Set([
 export function AgentSummary({
   run,
   fileCount,
+  entity,
 }: {
   run: Run;
   fileCount: number;
+  entity: string;
 }) {
   const s = run.stats_json;
   const autoPct = Math.round((s.stp_rate ?? 0) * 100);
@@ -42,7 +45,7 @@ export function AgentSummary({
         icon={<Loader2 className="h-6 w-6 animate-spin text-blue-600" />}
         tint="from-blue-50"
         title="Working through your data…"
-        subtitle={`Reading ${filesLabel}, matching employees across them, and cleaning things up. This usually takes just a few seconds.`}
+        subtitle={`Reading ${filesLabel}, matching ${pluralize(entity)} across them, and cleaning things up. This usually takes just a few seconds.`}
       />
     );
   }
@@ -57,7 +60,7 @@ export function AgentSummary({
         subtitle={`It has ${n} thing${n === 1 ? "" : "s"} it isn't sure about and would like your call on.`}
         tiles={[
           { icon: <CheckCircle2 className="h-4 w-4" />, value: `${autoPct}%`, label: "handled automatically" },
-          { icon: <Sparkles className="h-4 w-4" />, value: s.records, label: "employees found" },
+          { icon: <Sparkles className="h-4 w-4" />, value: s.records, label: `${pluralize(entity)} found` },
           { icon: <HelpCircle className="h-4 w-4" />, value: n, label: "questions for you", highlight: true },
         ]}
         cta={{ href: "#questions", label: `Review ${n} question${n === 1 ? "" : "s"}` }}
@@ -71,8 +74,8 @@ export function AgentSummary({
         icon={<CheckCircle2 className="h-6 w-6 text-emerald-600" />}
         tint="from-emerald-50"
         title="Everything's reviewed and ready."
-        subtitle={`${s.valid} employee${s.valid === 1 ? "" : "s"} are cleaned, checked, and ready to send to the new system.`}
-        cta={{ href: "#send", label: `Send ${s.valid} employee${s.valid === 1 ? "" : "s"}` }}
+        subtitle={`${countNoun(s.valid, entity)} ${s.valid === 1 ? "is" : "are"} cleaned, checked, and ready to send to the new system.`}
+        cta={{ href: "#send", label: `Send ${countNoun(s.valid, entity)}` }}
       />
     );
   }
@@ -94,7 +97,7 @@ export function AgentSummary({
         icon={<PartyPopper className="h-6 w-6 text-emerald-600" />}
         tint="from-emerald-50"
         title="All done!"
-        subtitle={`${s.pushed} employee${s.pushed === 1 ? "" : "s"} are now in the new system.${
+        subtitle={`${countNoun(s.pushed, entity)} ${s.pushed === 1 ? "is" : "are"} now in the new system.${
           s.push_failed ? ` ${s.push_failed} couldn't be sent — see below.` : ""
         }`}
       />

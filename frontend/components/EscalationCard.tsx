@@ -14,18 +14,20 @@ import { StatusPill, Avatar } from "./primitives";
 
 /**
  * One question, framed for a non-technical consultant: a plain-language
- * headline about a named employee (never a raw key), the choices laid out
+ * headline about a named record (never a raw key), the choices laid out
  * clearly, and obvious Approve / Correct / Leave-out actions.
  */
 export function EscalationCard({
   escalation,
   runId,
   nameFor,
+  entity,
 }: {
   escalation: Escalation;
   runId: string;
-  /** resolve a reconciliation key to the employee's real name */
+  /** resolve a reconciliation key to the record's real name */
   nameFor: (key: string) => string | undefined;
+  entity: string;
 }) {
   const qc = useQueryClient();
   const [selected, setSelected] = useState<string>("");
@@ -59,7 +61,7 @@ export function EscalationCard({
 
   const rejectLabel =
     escalation.type === "validation_failure"
-      ? "Skip this employee"
+      ? `Skip this ${entity}`
       : escalation.type === "unmapped_column" ||
           escalation.type === "ambiguous_mapping"
         ? "Leave this column out"
@@ -86,7 +88,7 @@ export function EscalationCard({
 
       {/* the question, in plain language */}
       <p className="mt-3 text-[15px] font-medium leading-snug text-neutral-900">
-        {headline(escalation, who)}
+        {headline(escalation, entity, who)}
       </p>
       <p className="mt-1 text-xs text-neutral-500">{copy.blurb}</p>
 
@@ -172,7 +174,7 @@ export function EscalationCard({
 }
 
 // -------------------------------------------------------------- helpers
-/** The employee this question is about, by real name where we can find it. */
+/** Who this question is about, by real name where we can find it. */
 function subjectName(
   e: Escalation,
   nameFor: (key: string) => string | undefined
@@ -188,9 +190,9 @@ function prettyKeyLocal(key: string): string {
   return prefix === "id" ? `#${value}` : value;
 }
 
-function headline(e: Escalation, who?: string): string {
+function headline(e: Escalation, entity: string, who?: string): string {
   const c = e.context_json;
-  const person = who ?? "this employee";
+  const person = who ?? `this ${entity}`;
   switch (e.type) {
     case "ambiguous_mapping":
       return `Where should the column "${c.source_column}" go?`;

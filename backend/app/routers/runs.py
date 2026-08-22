@@ -316,6 +316,7 @@ def _schema_preview(schema) -> dict:
         "primary_key": schema.primary_key,
         "match_keys": schema.match_keys,
         "field_count": len(schema.fields),
+        "display_field": schema.display_field,
         "fields": [
             {
                 "name": f.name,

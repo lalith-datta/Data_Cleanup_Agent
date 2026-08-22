@@ -165,9 +165,11 @@ max_push_attempts    = 3
 
 **Mapping decision:**
 - `score ≥ 0.90` and single clear winner → **auto-apply**.
-- top-2 within `ambiguous_delta` → **escalate `ambiguous_mapping`** (LLM may pre-rank, human decides).
+- top-2 within `ambiguous_delta` → send the tie (just the tied candidates, not the full schema) to the LLM; if it's confident (≥ `auto_apply_threshold`) → **auto-apply**, method `llm`; else **escalate `ambiguous_mapping`**. RapidFuzz has no semantic understanding, so a tie on character overlap doesn't mean the choice is genuinely unknowable — only escalate once the LLM has also had a shot at it.
 - `0.70 ≤ score < 0.90`, single winner → auto-apply **with a low-confidence note** (surfaced in audit, not escalated).
 - `score < 0.70` → send to LLM; if LLM confident → auto-apply w/ note; else **escalate `unmapped_column`**.
+
+**Manager-lookup decision** (`manager_unresolved`, §9): a manager value that isn't an email is fuzzy-matched against the run's own known employee emails. `score ≥ auto_apply_threshold` → **auto-apply** the matched email, method `agent`, fully audited; otherwise **escalate**. Deliberately binary — no lower "low-confidence, audited" tier the way mapping has, because attaching the wrong person's email as someone's manager is exactly the "plausible-looking wrong answer" this whole policy exists to catch, not a formatting nicety.
 
 **The line, stated plainly (for the write-up & panel):** the agent acts alone on anything **safe and verifiable** (high-similarity mappings, deterministic cleans, exact-duplicate removal). It escalates only where a **plausible-looking wrong answer is possible**: two viable target fields, conflicting values across files, an ambiguous date, or a record that fails validation twice. *Not everything. Not nothing.*
 

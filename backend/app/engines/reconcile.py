@@ -89,6 +89,16 @@ def _equivalent(
             if len(pb) == 1 and next(iter(pb)) in pa:
                 return True
         return False
+    if spec and spec.type == "enum":
+        # Two spellings of the same canonical value ("Pro" and "Premium"
+        # both meaning premium) are the same fact, not a conflict —
+        # enum_normalization already knows this mapping; conflict
+        # detection has to use it too, or it fires before the cleaning
+        # stage ever gets a chance to reconcile them.
+        canon_a = _canonical_enum_value(field, na, schema)
+        canon_b = _canonical_enum_value(field, nb, schema)
+        if canon_a and canon_b and canon_a == canon_b:
+            return True
     if spec and field == schema.primary_key:
         # E1001 vs 1001 — same employee id, different prefix formats
         da, db = re.sub(r"\D", "", na), re.sub(r"\D", "", nb)
@@ -104,6 +114,19 @@ def _equivalent(
     return False
 
 
+def _canonical_enum_value(
+    field: str, value: str, schema: TargetSchema
+) -> str | None:
+    """The canonical enum key `value` normalizes to, per the schema's own
+    enum_normalization map — or None if it doesn't match any variant."""
+    norm_map = schema.enum_normalization.get(field, {})
+    lv = value.strip().lower()
+    for canon, variants in norm_map.items():
+        if lv == canon.lower() or lv in (v.lower() for v in variants):
+            return canon
+    return None
+
+
 def _try_parse(fmt: str, value: str) -> str | None:
     from datetime import datetime
 
@@ -115,10 +138,17 @@ def _try_parse(fmt: str, value: str) -> str | None:
 
 _DATE_FORMATS = [
     ("%Y-%m-%d", "iso"),
+    ("%Y/%m/%d", "iso"),
     ("%d-%m-%Y", "dd/mm"),
     ("%d/%m/%Y", "dd/mm"),
     ("%m-%d-%Y", "mm/dd"),
     ("%m/%d/%Y", "mm/dd"),
+    # Spelled-out months are never day/month-order ambiguous — their own
+    # label, always a single candidate when they match at all.
+    ("%d-%b-%Y", "text-month"),
+    ("%d %b %Y", "text-month"),
+    ("%d-%B-%Y", "text-month"),
+    ("%d %B %Y", "text-month"),
 ]
 # Order-only labels (dash vs slash is just a separator choice) so a human's
 # "read this column dd/mm" resolution applies regardless of which
@@ -126,6 +156,7 @@ _DATE_FORMATS = [
 _LABEL_FORMATS: dict[str, list[str]] = {
     "dd/mm": ["%d-%m-%Y", "%d/%m/%Y"],
     "mm/dd": ["%m-%d-%Y", "%m/%d/%Y"],
+    "text-month": ["%d-%b-%Y", "%d %b %Y", "%d-%B-%Y", "%d %B %Y"],
 }
 
 
@@ -144,7 +175,9 @@ def _parse_with_label(label: str, value: str) -> str | None:
         parsed = _try_parse(fmt, value)
         if parsed:
             return parsed
-    return _try_parse("%Y-%m-%d", value)  # ISO is always acceptable
+    # ISO (either separator) is always acceptable regardless of the forced
+    # day/month order
+    return _try_parse("%Y-%m-%d", value) or _try_parse("%Y/%m/%d", value)
 
 
 def infer_source_date_formats(

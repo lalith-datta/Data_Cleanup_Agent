@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { apiGet } from "@/lib/api";
 import type { RecordRow } from "@/lib/types";
-import { fieldLabel, prettyValue, recordStatus } from "@/lib/labels";
+import { capitalize, fieldLabel, pluralize, prettyValue, recordStatus } from "@/lib/labels";
 import { Avatar, StatusPill } from "./primitives";
 
 /** Which internal statuses to offer as filters, in a friendly order. */
@@ -18,7 +18,15 @@ const FILTER_ORDER = [
   "clean",
 ];
 
-export function RecordsTable({ runId }: { runId: string }) {
+export function RecordsTable({
+  runId,
+  entity,
+  displayField,
+}: {
+  runId: string;
+  entity: string;
+  displayField: string | null;
+}) {
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState<number | null>(null);
 
@@ -34,7 +42,9 @@ export function RecordsTable({ runId }: { runId: string }) {
 
   return (
     <section className="mt-10">
-      <h2 className="text-xl font-semibold text-neutral-900">Employees</h2>
+      <h2 className="text-xl font-semibold text-neutral-900">
+        {capitalize(pluralize(entity))}
+      </h2>
       <p className="mb-4 mt-1 text-sm text-neutral-500">
         Everyone the agent pulled together from your files. Open a row to see
         where each value came from.
@@ -62,8 +72,12 @@ export function RecordsTable({ runId }: { runId: string }) {
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs font-medium text-neutral-500">
             <tr>
-              <th className="px-4 py-2.5">Employee</th>
-              <th className="hidden px-4 py-2.5 sm:table-cell">Department</th>
+              <th className="px-4 py-2.5">{capitalize(entity)}</th>
+              {displayField && (
+                <th className="hidden px-4 py-2.5 sm:table-cell">
+                  {fieldLabel(displayField)}
+                </th>
+              )}
               <th className="px-4 py-2.5">Status</th>
               <th className="px-4 py-2.5" />
             </tr>
@@ -71,7 +85,7 @@ export function RecordsTable({ runId }: { runId: string }) {
           <tbody className="divide-y">
             {rows.map((r) => {
               const name =
-                (r.merged_json.full_name as string) || "Unknown employee";
+                (r.merged_json.full_name as string) || `Unknown ${entity}`;
               const st = recordStatus(r.status);
               return (
                 <Fragment key={r.id}>
@@ -89,9 +103,11 @@ export function RecordsTable({ runId }: { runId: string }) {
                         </div>
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3 text-neutral-600 sm:table-cell">
-                      {r.merged_json.department || "—"}
-                    </td>
+                    {displayField && (
+                      <td className="hidden px-4 py-3 text-neutral-600 sm:table-cell">
+                        {r.merged_json[displayField] || "—"}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <StatusPill label={st.label} tone={st.tone} />
                     </td>
@@ -109,7 +125,7 @@ export function RecordsTable({ runId }: { runId: string }) {
                   </tr>
                   {expanded === r.id && (
                     <tr className="bg-neutral-50/70">
-                      <td colSpan={4} className="px-4 py-4">
+                      <td colSpan={displayField ? 4 : 3} className="px-4 py-4">
                         <ProvenanceGrid record={r} />
                       </td>
                     </tr>
@@ -121,7 +137,9 @@ export function RecordsTable({ runId }: { runId: string }) {
         </table>
         {rows.length === 0 && (
           <p className="px-4 py-8 text-center text-sm text-neutral-400">
-            {records.isLoading ? "Loading…" : "No employees to show here yet."}
+            {records.isLoading
+              ? "Loading…"
+              : `No ${pluralize(entity)} to show here yet.`}
           </p>
         )}
       </div>

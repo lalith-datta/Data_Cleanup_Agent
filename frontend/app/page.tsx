@@ -1,87 +1,108 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, FolderClock, Inbox } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import type { Run } from "@/lib/types";
 import { runStatus } from "@/lib/labels";
-import NewRunForm from "@/components/NewRunForm";
 import { StatusPill } from "@/components/primitives";
 
-export default function Home() {
-  const health = useQuery({
-    queryKey: ["health"],
-    queryFn: () =>
-      apiGet<{ status: string; db: string; llm: string }>("/health"),
-    retry: false,
-  });
+/** One-line, plain-language summary of where a run stands. */
+function summary(run: Run): string {
+  const s = run.stats_json;
+  switch (run.status) {
+    case "awaiting_review":
+      return `${s.escalations_open} question${s.escalations_open === 1 ? "" : "s"} need you`;
+    case "ready_to_push":
+      return `${s.valid} ready to send`;
+    case "pushing":
+      return `${s.pushed} sent${s.push_failed ? `, ${s.push_failed} to retry` : "…"}`;
+    case "completed":
+      return `${s.pushed} employee${s.pushed === 1 ? "" : "s"} sent`;
+    case "failed":
+      return "Stopped before finishing";
+    case "rolled_back":
+      return "Changes undone";
+    case "created":
+      return "Not started yet";
+    default:
+      return "Working…";
+  }
+}
+
+export default function MigrationsList() {
   const runs = useQuery({
     queryKey: ["runs"],
     queryFn: () => apiGet<Run[]>("/api/runs"),
-    retry: false,
+    refetchInterval: 3000,
   });
 
-  const connected = !!health.data;
+  const list = runs.data ?? [];
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <header className="mb-8">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            Migration Assistant
-          </h1>
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-              connected
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-neutral-100 text-neutral-500"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                connected ? "bg-emerald-500" : "bg-neutral-400"
-              }`}
-            />
-            {connected ? "Connected" : health.isError ? "Offline" : "…"}
-          </span>
-        </div>
-        <p className="mt-1 text-sm text-neutral-500">
-          Bring a client&rsquo;s messy employee files into the new system. The
-          assistant does the heavy lifting and only checks in with you when it
-          genuinely needs a decision.
-        </p>
-      </header>
+    <div className="mx-auto max-w-3xl px-6 py-8">
+      <div className="mb-1 flex items-center gap-2">
+        <FolderClock className="h-5 w-5 text-neutral-400" />
+        <h1 className="text-xl font-semibold text-neutral-900">
+          Your migrations
+        </h1>
+      </div>
+      <p className="mb-5 text-sm text-neutral-500">
+        Pick one to see how it&rsquo;s going, or start a new one from the left.
+      </p>
 
-      <NewRunForm />
-
-      {runs.data && runs.data.length > 0 && (
-        <div className="mt-10">
-          <h2 className="mb-2 text-sm font-semibold text-neutral-700">
-            Recent migrations
-          </h2>
-          <ul className="divide-y overflow-hidden rounded-2xl border bg-white">
-            {runs.data.map((r) => {
-              const st = runStatus(r.status);
-              return (
-                <li key={r.id}>
-                  <a
-                    href={`/runs/${r.id}`}
-                    className="group flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-neutral-50"
-                  >
-                    <span className="min-w-0 truncate text-sm font-medium text-neutral-900">
+      {runs.isError ? (
+        <EmptyCard
+          title="Can't reach the backend"
+          body="Check that the API is running and try again."
+        />
+      ) : runs.isLoading ? (
+        <p className="text-sm text-neutral-400">Loading…</p>
+      ) : list.length === 0 ? (
+        <EmptyCard
+          title="No migrations yet"
+          body="Upload a client's employee files on the left to start your first one."
+        />
+      ) : (
+        <ul className="space-y-2">
+          {list.map((r) => {
+            const st = runStatus(r.status);
+            return (
+              <li key={r.id}>
+                <a
+                  href={`/runs/${r.id}`}
+                  className="group flex items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3.5 hover:border-neutral-300 hover:shadow-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-neutral-900">
                       {r.name}
-                    </span>
-                    <span className="flex shrink-0 items-center gap-3">
-                      <StatusPill label={st.label} tone={st.tone} />
-                      <ArrowRight className="h-4 w-4 text-neutral-300 group-hover:text-neutral-500" />
-                    </span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+                    </div>
+                    <div className="mt-0.5 text-xs text-neutral-500">
+                      {summary(r)}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <StatusPill label={st.label} tone={st.tone} />
+                    <ArrowRight className="h-4 w-4 text-neutral-300 group-hover:text-neutral-500" />
+                  </div>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
       )}
-    </main>
+    </div>
+  );
+}
+
+function EmptyCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed bg-white px-6 py-14 text-center">
+      <div className="rounded-full bg-neutral-100 p-3">
+        <Inbox className="h-6 w-6 text-neutral-400" />
+      </div>
+      <p className="mt-3 text-sm font-medium text-neutral-800">{title}</p>
+      <p className="mt-1 max-w-sm text-sm text-neutral-500">{body}</p>
+    </div>
   );
 }

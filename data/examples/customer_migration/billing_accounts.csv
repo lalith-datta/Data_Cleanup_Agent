@@ -1,4 +1,0 @@
-account_id,customer_name,contact_email,telephone,account_name,account_tier,created_date,account_status,billing_city,total_spend
-C-1001,Aisha Patel,aisha.patel@northstar.example,09876543210,Northstar Retail,Premium,2024-01-15,Active,Bangalore,"125,000.50"
-C-1002,Daniel Wong,daniel.wong@harbor.example,+91 98765 00002,Harbor Logistics,Corporate,08-Nov-2023,Active,Mumbai,450000
-C-1004,Vikram Shah,vikram.shah@pioneer.example,9000012345,Pioneer Foods,Starter,2024/03/10,On Hold,Ahmedabad,0

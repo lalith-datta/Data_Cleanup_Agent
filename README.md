@@ -1,20 +1,21 @@
 # AI Agent for Client Data Migration & Integration
 
-An agent that ingests messy, multi-file **employee** exports, autonomously **maps → cleans → validates** them against a target schema, pushes the result to a **mock target API**, and **escalates only genuinely ambiguous cases** to a non-technical implementation consultant through a supervision UI — with a full audit trail.
+An agent that ingests messy, multi-file exports, autonomously **maps → cleans → validates** them against a target schema, pushes the result to a target system, and **escalates only genuinely ambiguous cases** to a non-technical implementation consultant through a supervision UI — with a full audit trail.
 
 > **The core idea:** autonomy is only trustworthy if uncertainty is visible. The agent does the safe majority alone and asks smart, well-scoped questions about the rest — it never guesses silently on data it isn't sure about.
 
-Built for the Darwinbox **Forward Deployed Engineer** take-home. See [`docs/PRD.md`](docs/PRD.md) for the full spec and [`docs/EPICS.md`](docs/EPICS.md) for the build plan.
+The default fixture models employee data, but each migration can use its own YAML or JSON target schema. See [`docs/PRD.md`](docs/PRD.md) for the full specification and [`docs/EPICS.md`](docs/EPICS.md) for the build plan.
 
 ---
 
 ## Highlights
 
-- **Multi-file reconciliation** — merges 3 exports with different headers/formats into one dataset, matching people across files (handles `E1001` ↔ `1001` id mismatches).
+- **Schema-driven migration** — upload a YAML or JSON target schema for a run, preview its parsed fields before starting, and use the schema's own entity, match keys and primary key.
+- **Multi-file reconciliation** — merges exports with different headers/formats into one dataset, matching records across files (the employee fixture handles `E1001` ↔ `1001` id mismatches).
 - **Deterministic-first, LLM-last** — rules + fuzzy matching handle the safe ~90%; an LLM (via LangChain) adjudicates only genuine ambiguity. Reproducible, cheap, fast.
 - **Defensible escalation boundary** — escalates only where a plausible-looking wrong answer is possible: ambiguous mappings, cross-file value conflicts, ambiguous dates, twice-failed validations, unmapped columns.
 - **Human-in-the-loop UI** — live activity feed, a one-glance escalation queue, and approve / correct / reject.
-- **Idempotent integration** — per-record push to a mock API with retry + rollback, keyed on `employee_id` so retries never duplicate.
+- **Safe delivery** — per-record, idempotent delivery keyed on the configured schema primary key, with partial-send counts, targeted retry for failed records and rollback.
 - **Full audit trail** — every agent decision and human override, with rationale + confidence.
 
 ## Architecture
@@ -25,7 +26,7 @@ Next.js (Vercel-ready)  ──REST + poll──▶  FastAPI backend
    Escalation Queue                          ├─ Engines: ingest / map / reconcile / clean / validate
    Records + Push + Audit                    ├─ Escalation engine (confidence boundary)
                                              ├─ LLMClient  ──▶  LangChain (provider-agnostic) | MockLLM
-                                             ├─ Push client ──▶  Mock target API (deterministic failures)
+                                             ├─ Push client ──▶  Target connector / mock target API
                                              └─ SQLite (DATABASE_URL → Postgres/Supabase later)
 ```
 
@@ -40,7 +41,7 @@ Pipeline: `Ingest → Map → Reconcile → Clean → Validate → [awaiting rev
 | Data | Pandas · RapidFuzz · python-dateutil |
 | AI | **LangChain** provider-agnostic (`init_chat_model`) behind an `LLMClient` interface; MockLLM fallback |
 | Persistence | SQLite (default) via SQLModel/SQLAlchemy, selected by `DATABASE_URL` |
-| Mock target | FastAPI router with deterministic failures |
+| Target integration | FastAPI mock target with deterministic demo failures; primary-key-aware push interface |
 
 ## Repository layout
 
@@ -50,7 +51,8 @@ Pipeline: `Ingest → Map → Reconcile → Clean → Validate → [awaiting rev
 ├── frontend/           # Next.js supervision UI (app/, components/, lib/)
 ├── data/
 │   ├── target_schema.yaml
-│   └── source/{hr_export,crm_export,payroll_export}.csv
+│   ├── source/{hr_export,crm_export,payroll_export}.csv
+│   └── examples/customer_migration/  # custom-schema YAML + sample CSVs
 ├── docs/
 │   ├── PRD.md          # full product + technical spec
 │   ├── EPICS.md        # epics & task breakdown for the coding agent
@@ -108,7 +110,20 @@ All environment-specific values are injected via env vars so cloud adoption is *
 | `<PROVIDER>_API_KEY` | Provider credential | unset |
 | `NEXT_PUBLIC_API_URL` | Frontend → backend base URL | `http://localhost:8000` |
 | `UPLOAD_DIR` | Local file storage | `./uploads` |
+| `TARGET_SCHEMA_PATH` | Default schema when a run has no uploaded schema | `../data/target_schema.yaml` |
 | `AUTO_APPLY_THRESHOLD` / `MIN_MAP_THRESHOLD` / `AMBIGUOUS_DELTA` | Escalation tuning | `0.90 / 0.70 / 0.08` |
+
+## Custom target schemas
+
+When starting a migration, optionally upload a `.yaml`, `.yml` or `.json`
+schema in the **Custom target schema** panel. The application validates and
+previews the parsed entity, primary key, match keys and fields before the run
+starts. The uploaded schema drives mapping, cleaning, validation,
+reconciliation and delivery for that run.
+
+Schemas may be a full specification or a minimal list of field names. A full
+example for a customer migration, along with three intentionally varied source
+files, is available in [`data/examples/customer_migration/`](data/examples/customer_migration/).
 
 ## Sample data walkthrough
 
@@ -136,17 +151,17 @@ The agent acts alone on anything **safe and verifiable** (high-similarity header
 
 ## API summary
 
-`POST /api/runs` · `POST /api/runs/{id}/files` · `POST /api/runs/{id}/start` · `GET /api/runs/{id}` · `GET /api/runs/{id}/activity` · `GET /api/runs/{id}/escalations` · `POST /api/escalations/{id}/resolve` · `GET /api/runs/{id}/records` · `POST /api/runs/{id}/push` · `POST /api/runs/{id}/push/retry` · `POST /api/runs/{id}/rollback` · `GET /api/runs/{id}/audit`. Full contract in [`docs/PRD.md` §10](docs/PRD.md).
+`POST /api/runs` · `POST /api/runs/schema/preview` · `POST /api/runs/{id}/schema` · `GET /api/runs/{id}/schema` · `POST /api/runs/{id}/files` · `POST /api/runs/{id}/start` · `GET /api/runs/{id}` · `GET /api/runs/{id}/activity` · `GET /api/runs/{id}/escalations` · `POST /api/escalations/{id}/resolve` · `GET /api/runs/{id}/records` · `POST /api/runs/{id}/push` · `POST /api/runs/{id}/push/retry` · `POST /api/runs/{id}/rollback` · `GET /api/runs/{id}/audit`. Full contract in [`docs/PRD.md` §10](docs/PRD.md).
 
 ## Demo script
 
 1. Upload the 3 sample files → **Start**.
 2. Watch the live feed auto-map & clean the safe majority (STP % climbs to ~80%+).
 3. Escalation queue shows ~9 items → resolve **`PersonalEmail` (unmapped column)** by mapping it to `email` — watch this surface a *new* **email conflict** escalation (work vs. personal), which wasn't there a moment ago, demonstrating the re-trigger-on-resolve mechanism live. Resolve that conflict (pick work email), then the **`Grade` unmapped column** (drop).
-4. **Push** → one record fails (missing dept — Vikram, payroll-only) → **Retry** / show **Rollback**.
+4. **Push** → one record fails (missing department — Vikram, payroll-only). The send attempt completes with sent/failed counts; use **Retry** for only the failed record or **Rollback** to undo sent records.
 5. Open the **Audit Log** to show the full record of what changed and why.
 
-## Optional: cloud path (time-permitting)
+## Deployment path
 
 The build is local-first but cloud-ready. To host later (no code changes, just config — see Epic 14):
 - `DATABASE_URL` → Supabase Postgres; uploads → Supabase Storage.

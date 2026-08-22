@@ -18,7 +18,7 @@ from ..engines.reconcile import (
     infer_source_date_formats,
     reconcile,
 )
-from ..engines.schema_loader import load_target_schema
+from ..engines.schema_loader import get_run_schema
 from ..engines.validate import auto_fix, validate_record
 from ..llm import get_llm_client
 from ..models import AuditLog, Escalation, FieldMapping, MigrationRun, Record, SourceFile
@@ -32,7 +32,7 @@ def _touch(run: MigrationRun) -> None:
 
 # ---------------------------------------------------------------- mapping
 async def run_mapping_stage(session: Session, run: MigrationRun) -> None:
-    schema = load_target_schema()
+    schema = get_run_schema(run)
     run.status = "mapping"
     _touch(run)
     session.add(run)
@@ -152,7 +152,7 @@ async def run_mapping_stage(session: Session, run: MigrationRun) -> None:
 def run_downstream_stages(session: Session, run: MigrationRun) -> None:
     """Rebuild records from current mappings, then clean + validate.
     Idempotent pre-push: existing records for the run are replaced."""
-    schema = load_target_schema()
+    schema = get_run_schema(run)
 
     mappings = session.exec(
         select(FieldMapping).where(

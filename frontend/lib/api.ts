@@ -36,3 +36,17 @@ export async function apiUpload<T>(path: string, files: File[]): Promise<T> {
   if (!res.ok) throw await apiError(res, `POST ${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
+
+export async function apiUploadSingle<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}${path}`, { method: "POST", body: form });
+  if (!res.ok) throw await apiError(res, `POST ${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
+  if (!res.ok) throw await apiError(res, `DELETE ${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}

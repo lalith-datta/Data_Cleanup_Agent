@@ -8,6 +8,11 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..engines.ingest import parse_file, profile_columns
+from ..engines.schema_loader import (
+    get_run_schema,
+    load_schema_from_content,
+    schema_to_dict,
+)
 from ..models import AuditLog, FieldMapping, MigrationRun, Record, SourceFile
 from ..storage import get_storage
 
@@ -195,3 +200,101 @@ def list_mappings(run_id: int, session: Session = Depends(get_session)):
     return session.exec(
         select(FieldMapping).where(FieldMapping.run_id == run_id)
     ).all()
+
+
+# -------------------------------------------------------- schema management
+@router.post("/{run_id}/schema")
+async def upload_schema(
+    run_id: int,
+    file: UploadFile,
+    session: Session = Depends(get_session),
+):
+    """Upload a custom target schema (YAML or JSON) for this run.
+    The parser is lenient: a bare list of field names, a dict with just
+    'fields', or a full spec are all accepted."""
+    run = session.get(MigrationRun, run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    if run.status not in ("created", "ingesting"):
+        raise HTTPException(
+            409, f"cannot change schema after pipeline has started (status: {run.status})"
+        )
+
+    filename = (file.filename or "").lower()
+    if filename.endswith(".json"):
+        fmt = "json"
+    elif filename.endswith((".yaml", ".yml")):
+        fmt = "yaml"
+    else:
+        raise HTTPException(
+            422, "Unsupported file type. Upload a .yaml, .yml, or .json file."
+        )
+
+    content = (await file.read()).decode("utf-8")
+    try:
+        schema = load_schema_from_content(content, fmt)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+    # Store the raw parsed dict (not the Pydantic model) so we can
+    # re-parse leniently on every access — keeps the column small.
+    run.custom_schema_json = schema_to_dict(schema)
+    run.updated_at = datetime.now(timezone.utc)
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+
+    return {
+        "message": "Schema uploaded successfully",
+        "schema": _schema_preview(schema),
+    }
+
+
+@router.get("/{run_id}/schema")
+def get_schema(run_id: int, session: Session = Depends(get_session)):
+    """Return the effective schema for this run (custom if uploaded, else
+    the default). Includes a preview of all parsed fields."""
+    run = session.get(MigrationRun, run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    schema = get_run_schema(run)
+    return {
+        "custom": run.custom_schema_json is not None,
+        "schema": _schema_preview(schema),
+    }
+
+
+@router.delete("/{run_id}/schema")
+def delete_schema(run_id: int, session: Session = Depends(get_session)):
+    """Clear the custom schema, reverting to the default."""
+    run = session.get(MigrationRun, run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    if run.status not in ("created", "ingesting"):
+        raise HTTPException(
+            409, f"cannot change schema after pipeline has started (status: {run.status})"
+        )
+    run.custom_schema_json = None
+    run.updated_at = datetime.now(timezone.utc)
+    session.add(run)
+    session.commit()
+    return {"message": "Custom schema removed, using default."}
+
+
+def _schema_preview(schema) -> dict:
+    """Build a human-friendly preview of a parsed schema."""
+    return {
+        "entity": schema.entity,
+        "primary_key": schema.primary_key,
+        "match_keys": schema.match_keys,
+        "field_count": len(schema.fields),
+        "fields": [
+            {
+                "name": f.name,
+                "type": f.type,
+                "required": f.required,
+                "aliases": f.aliases,
+            }
+            for f in schema.fields.values()
+        ],
+    }

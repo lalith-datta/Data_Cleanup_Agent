@@ -1,0 +1,54 @@
+# ======================== Python ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+.python-version
+
+# ======================== Node / Next.js ================
+node_modules/
+.next/
+out/
+.turbo/
+next-env.d.ts
+
+# ======================== Environment & Secrets =========
+.env
+.env.local
+.env.*.local
+!.env.production.example
+!.env.local.example
+
+# ======================== Database ======================
+*.db
+*.sqlite
+*.sqlite3
+
+# ======================== Uploads =======================
+uploads/
+
+# ======================== OS / Editor ===================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# ======================== Misc ==========================
+*.log
+*.pid
+.cache/
+coverage/
+.nyc_output/

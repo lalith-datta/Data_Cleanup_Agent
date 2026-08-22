@@ -21,6 +21,10 @@ class MigrationRun(SQLModel, table=True):
     # awaiting_review | ready_to_push | pushing | completed | failed | rolled_back
     config_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     stats_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    # User-uploaded target schema (raw parsed dict). None = use default file.
+    custom_schema_json: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

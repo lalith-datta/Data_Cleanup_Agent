@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
-from ..engines.schema_loader import load_target_schema
+from ..engines.schema_loader import get_run_schema
 from ..engines.validate import validate_record
 from ..models import Escalation, FieldMapping, MigrationRun, Record, SourceFile
 from .audit import audit
@@ -150,7 +150,9 @@ def _apply_mapping_resolution(
         # §9 only allows "pick target · ignore column" for this type — a
         # free-typed value must still name a real schema field, or a typo'd
         # correction would silently corrupt the mapping at confidence 1.0.
-        if value not in load_target_schema().field_names():
+        run = session.get(MigrationRun, esc.run_id)
+        schema = get_run_schema(run) if run else None
+        if schema and value not in schema.field_names():
             raise HTTPException(
                 422,
                 f"'{value}' is not a target schema field — pick one of the "
@@ -256,7 +258,7 @@ def _reclean_revalidate_record(
 ) -> None:
     from ..engines.clean import clean_record
 
-    schema = load_target_schema()
+    schema = get_run_schema(run)
     rec = _record_by_key(session, run.id, natural_key)
     if not rec:
         return
@@ -269,7 +271,7 @@ def _reclean_revalidate_record(
 def _revalidate_record(
     session: Session, run: MigrationRun, natural_key: str
 ) -> None:
-    schema = load_target_schema()
+    schema = get_run_schema(run)
     rec = _record_by_key(session, run.id, natural_key)
     if rec:
         _finish_validation(session, run, rec, schema)

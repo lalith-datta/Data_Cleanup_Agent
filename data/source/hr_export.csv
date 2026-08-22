@@ -1,0 +1,5 @@
+Emp ID,Employee Name,Work Email,Dept,Designation,DOJ,DOB,Reporting Manager Email,Office Location,Status
+E1001, Priya Sharma ,priya.sharma@acme.com,Engineering,Senior Engineer,15-03-2021,08/11/1990,anil.kumar@acme.com,Bangalore,Active
+E1002,Rahul Verma,rahul.verma@acme.com,Sales,Account Executive,03-04-2023,22/07/1988,meena.nair@acme.com,Mumbai,active 
+E1003,Anita Desai,,Marketing,Marketing Lead,10-01-2020,,priya.sharma@acme.com,Delhi,ON LEAVE
+E1006, John D'Souza ,john.dsouza@acme.com , Operations , ops manager ,05-06-2019,30/02/1985,meena.nair@acme.com,Chennai,Active

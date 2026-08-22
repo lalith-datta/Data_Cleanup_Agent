@@ -1,0 +1,23 @@
+# Render Blueprint — deploys the FastAPI agent as a persistent web service.
+# Docs: https://render.com/docs/blueprint-spec
+# This file lives at the repo root; the service builds from ./backend.
+services:
+  - type: web
+    name: migration-agent-backend
+    runtime: python
+    rootDir: backend
+    plan: free # free spins down after ~15 min idle (≈50s cold start); use "starter" to stay warm
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      # Set these in the Render dashboard (sync:false = not stored in git):
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      # Leave LLM_PROVIDER empty to run with the deterministic MockLLM.
+      - key: LLM_PROVIDER
+        value: ""

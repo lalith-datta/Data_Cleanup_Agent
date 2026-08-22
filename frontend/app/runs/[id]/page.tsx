@@ -1,0 +1,131 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
+import { use } from "react";
+import { apiGet, apiPost } from "@/lib/api";
+import type { ActivityEvent, Run, SourceFile } from "@/lib/types";
+import { runStatus } from "@/lib/labels";
+import { ActivityFeed } from "@/components/ActivityFeed";
+import { AgentSummary } from "@/components/AgentSummary";
+import { AuditLogView } from "@/components/AuditLogView";
+import { EscalationQueue } from "@/components/EscalationQueue";
+import { ProgressBanner } from "@/components/ProgressBanner";
+import { PushPanel } from "@/components/PushPanel";
+import { RecordsTable } from "@/components/RecordsTable";
+import { StatusPill } from "@/components/primitives";
+
+const ACTIVE_STATUSES = new Set([
+  "ingesting",
+  "mapping",
+  "reconciling",
+  "cleaning",
+  "validating",
+  "pushing",
+]);
+
+export default function RunPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const qc = useQueryClient();
+
+  const run = useQuery({
+    queryKey: ["run", id],
+    queryFn: () => apiGet<Run>(`/api/runs/${id}`),
+    refetchInterval: 1500,
+  });
+
+  const files = useQuery({
+    queryKey: ["files", id],
+    queryFn: () => apiGet<SourceFile[]>(`/api/runs/${id}/files`),
+  });
+
+  const start = useMutation({
+    mutationFn: () => apiPost(`/api/runs/${id}/start`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["run", id] }),
+  });
+
+  const status = run.data?.status ?? "ingesting";
+  const isActive = ACTIVE_STATUSES.has(status);
+  const showProgress = status !== "failed" && status !== "rolled_back";
+
+  const activity = useQuery({
+    queryKey: ["activity", id],
+    queryFn: () => apiGet<ActivityEvent[]>(`/api/runs/${id}/activity`),
+    refetchInterval: isActive ? 1000 : false,
+  });
+
+  const st = runStatus(status);
+  const escalationsOpen = run.data?.stats_json.escalations_open ?? 0;
+
+  return (
+    <main className="mx-auto max-w-5xl px-6 py-8">
+      <a
+        href="/"
+        className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        All migrations
+      </a>
+
+      <header className="mb-6 mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold text-neutral-900">
+            {run.data?.name ?? "…"}
+          </h1>
+          <StatusPill label={st.label} tone={st.tone} />
+        </div>
+        {(status === "created" || status === "ingesting") &&
+          (files.data?.length ?? 0) > 0 && (
+            <button
+              type="button"
+              disabled={start.isPending}
+              onClick={() => start.mutate()}
+              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {start.isPending ? "Starting…" : "Start migration"}
+            </button>
+          )}
+      </header>
+
+      {start.isError && (
+        <p className="mb-4 text-sm text-rose-600">
+          {(start.error as Error).message}
+        </p>
+      )}
+
+      {run.data && (
+        <AgentSummary run={run.data} fileCount={files.data?.length ?? 0} />
+      )}
+
+      {showProgress && (
+        <div className="mt-4 rounded-2xl border bg-white p-4">
+          <ProgressBanner status={status} />
+        </div>
+      )}
+
+      {/* Watch: show the live narration while there's motion or nothing else
+          demands attention yet. */}
+      {(isActive || status === "created") && (
+        <div className="mt-4">
+          <ActivityFeed events={activity.data ?? []} />
+        </div>
+      )}
+
+      {(status === "awaiting_review" || escalationsOpen > 0) && (
+        <EscalationQueue runId={id} />
+      )}
+
+      {run.data && <PushPanel run={run.data} runId={id} />}
+
+      <RecordsTable runId={id} />
+
+      {/* History lives at the bottom — the full record is available but
+          doesn't crowd the guided flow. */}
+      <AuditLogView runId={id} />
+    </main>
+  );
+}

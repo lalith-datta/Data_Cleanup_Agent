@@ -1,0 +1,4 @@
+EmployeeCode,FullName,PersonalEmail,CTC,Grade,DateOfJoining,BankName,EmploymentType
+E1001,Priya Sharma,priya.s@gmail.com,2400000,L5,2021-03-15,HDFC,Full-time
+E1003,Anita Desai,anita.desai@acme.com,1800000,L6,2020-01-10,ICICI,Full-time
+E1005,Vikram Rao,vikram.rao@acme.com,3000000,L7,2018-09-01,SBI,Full-time

@@ -1,0 +1,5 @@
+id,name,email_address,mobile,team,title,joined_on,manager,city
+1001,Priya Sharma,priya.sharma@acme.com,+91-98765-43210,Engineering,Senior Software Engineer,03/15/2021,Anil Kumar,Bangalore
+1002,Rahul Verma,rahul.verma@acme.com,9876500001,Sales,Account Executive,04/03/2023,Meena Nair,Mumbai
+1004,Sara Khan,sara.khan@acme.com,+91 90000 11111,Support,Support Specialist,11/20/2022,Rahul Verma,Pune
+1002,Rahul Verma,rahul.verma@acme.com,9876500001,Sales,Account Executive,04/03/2023,Meena Nair,Mumbai
